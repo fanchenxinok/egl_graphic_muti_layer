@@ -50,7 +50,7 @@ typedef struct
 	GLuint programObject;
 	GLint samplerLoc;
 #endif
-
+	
 	GLfloat alphas[LAYER_MAX];
 	GLuint textureIds[LAYER_MAX][MAX_TEXTURE_PER_LAYER];	// Texture handle
 	GLuint textureNumPerLayer[LAYER_MAX];
@@ -73,7 +73,7 @@ typedef struct
 } stUserData;
 
 static const char* s_images[LAYER_MAX][MAX_TEXTURE_PER_LAYER] = {
-	{"bricks.jpg", "crack.png"},
+	{"bricks.jpg", "crack.png", "christmas.png"},
 	{"window.png"},
 	{"grass.png", "grass.png", "grass.png", "grass.png"},
 	{"sun.png"}
@@ -124,7 +124,7 @@ GLint loadTexture(const char* name, GLint *outWidth, GLint *outHeight)
 	else {
 		esLogMessage("Failed to load texture\n");
 	}
-
+	
 	return texture;
 }
 
@@ -136,7 +136,7 @@ void digHoleInTexture(stUserData *userData, GLint texture, stRect *pRect, GLubyt
 		userData->holePixes[i] = alpha;
 	}
 	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, pRect->left, pRect->top, pRect->width, pRect->width, GL_RGBA, GL_UNSIGNED_BYTE, userData->holePixes);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, pRect->left, pRect->top, pRect->width, pRect->height, GL_RGBA, GL_UNSIGNED_BYTE, userData->holePixes);
 }
 
 static GLfloat coordinateTrans(GLfloat coord, enTRANS_TYPE type)
@@ -378,12 +378,13 @@ int Init(ESContext *esContext)
 	userData->holePixes = (GLubyte*)malloc(sizeof(GLubyte) * userData->winWidth * userData->winHeight * 4);
 	memset(userData->holePixes, 0, sizeof(GLubyte) * userData->winWidth * userData->winHeight * 4);
 
-	// layer0 have 2 texture
+	// layer0 have 3 texture
 	initDispArea(userData, LAYER_ID_0, 0, 0, userData->winWidth, userData->winHeight);
 	initDispArea(userData, LAYER_ID_0, 0, 0, userData->winWidth, userData->winHeight);
+	initDispArea(userData, LAYER_ID_0, 200, 180, 200, 128);
 
-	// layer1 have 1 texture
-	initDispArea(userData, LAYER_ID_1, 100, 100, 400, 300);
+	// layer1 have 2 texture
+	initDispArea(userData, LAYER_ID_1, 100, 100, 400, 400);
 
 	// layer2 have 4 texture
 	initDispArea(userData, LAYER_ID_2, 320, 420, 500, 300);
@@ -415,29 +416,29 @@ int Init(ESContext *esContext)
 		"void main()                                         \n"
 		"{                                                   \n"
 		"  outColor = texture( s_sampler, v_texCoord );   \n"
-#if MUTI_PROGRAM_ENABLE 
+		#if MUTI_PROGRAM_ENABLE 
 		"  outColor.a = outColor.a * ctl_alpha;             \n"
-#endif
+		#endif
 		"}                                                   \n";
 
-#if !MUTI_PROGRAM_ENABLE
+	#if !MUTI_PROGRAM_ENABLE
 	// Load the shaders and get a linked program object
 	userData->programObject = esLoadProgram(vShaderStr, fShaderStr);
 	// Get the sampler location
 	userData->samplerLoc = glGetUniformLocation(userData->programObject, "s_sampler");
-#endif	
+	#endif	
 
 	GLint layer = LAYER_ID_0;
 	for (; layer < LAYER_MAX; layer++) {
-#if MUTI_PROGRAM_ENABLE
+		#if MUTI_PROGRAM_ENABLE
 		// Load the shaders and get a linked program object
 		userData->programObjects[layer] = esLoadProgram(vShaderStr, fShaderStr);
 
 		// Get the sampler location
 		userData->samplerLocs[layer] = glGetUniformLocation(userData->programObjects[layer], "s_sampler");
 		userData->ctlAlphaLocs[layer] = glGetUniformLocation(userData->programObjects[layer], "ctl_alpha");
-#endif
-
+		#endif
+		
 		GLint texIdx = 0;
 		for (; texIdx < userData->textureNumPerLayer[layer]; texIdx++) {
 			// Load the textures
@@ -507,25 +508,25 @@ void Update(ESContext *esContext, float deltaTime)
 
 #if 0
 	if (cnt % 200 < 100) {
-#if 0  // method 1
+	#if 0  // method 1
 		setLayerAlpha(userData, LAYER_ID_0, 1.0f);  // show
-#else   // method 2 is more effective
+	#else   // method 2 is more effective
 		dispArea.left = 0;
 		dispArea.top = 0;
 		dispArea.width = userData->winWidth;
 		dispArea.height = userData->winHeight;
 		setDispArea(userData, LAYER_ID_0, 1, &dispArea);
 		updateVAO(userData, LAYER_ID_0, 1);
-#endif
+	#endif
 	}
 	else {
-#if 0
+	#if 0
 		setLayerAlpha(userData, LAYER_ID_0, 0.0f);  // hide
-#else
+	#else
 		memset(&dispArea, 0, sizeof(dispArea));
 		setDispArea(userData, LAYER_ID_0, 1, &dispArea);
 		updateVAO(userData, LAYER_ID_0, 1);
-#endif
+	#endif
 	}
 #else
 	static GLuint h = 0;
@@ -538,7 +539,7 @@ void Update(ESContext *esContext, float deltaTime)
 	dispArea.left = 0;
 	dispArea.top = 0;
 	dispArea.width = userData->winWidth;
-	dispArea.height = h * userData->winHeight / userData->texSize[LAYER_ID_0][1].height;
+	dispArea.height = h * userData->winHeight /userData->texSize[LAYER_ID_0][1].height;
 	setDispArea(userData, LAYER_ID_0, 1, &dispArea);
 	updateVAO(userData, LAYER_ID_0, 1);
 
@@ -564,27 +565,27 @@ void Draw(ESContext *esContext)
 	// Clear the color buffer
 	glClear(GL_COLOR_BUFFER_BIT);
 
-#if !MUTI_PROGRAM_ENABLE
+	#if !MUTI_PROGRAM_ENABLE
 	glUseProgram(userData->programObject);
 	// Set the base map sampler to texture unit to 0
 	glUniform1i(userData->samplerLoc, 0);
-#endif
+	#endif
 
 	GLint layer = LAYER_ID_0;
 	for (; layer < LAYER_MAX; layer++) {
-#if MUTI_PROGRAM_ENABLE
+		#if MUTI_PROGRAM_ENABLE
 		glUseProgram(userData->programObjects[layer]);
 		// Set the base map sampler to texture unit to 0
 		glUniform1i(userData->samplerLocs[layer], 0);
-#endif
-
+		#endif
+		
 		glActiveTexture(GL_TEXTURE0);
 
-#if MUTI_PROGRAM_ENABLE
+		#if MUTI_PROGRAM_ENABLE
 		glUniform1f(userData->ctlAlphaLocs[layer], userData->alphas[layer]);
-#else
-		if (userData->alphas[layer] == 0) continue; // this layer not show
-#endif
+		#else
+		if(userData->alphas[layer] == 0) continue; // this layer not show
+		#endif
 
 		GLint texIdx = 0;
 		for (; texIdx < userData->textureNumPerLayer[layer]; texIdx++) {
@@ -617,16 +618,16 @@ void Draw(ESContext *esContext)
 void ShutDown(ESContext *esContext)
 {
 	stUserData *userData = esContext->userData;
-#if !MUTI_PROGRAM_ENABLE
+	#if !MUTI_PROGRAM_ENABLE
 	glDeleteProgram(userData->programObject);
-#endif
+	#endif
 
 	GLint i = 0;
 	for (i = 0; i < LAYER_MAX; i++) {
-#if MUTI_PROGRAM_ENABLE
+		#if MUTI_PROGRAM_ENABLE
 		// Delete program object
 		glDeleteProgram(userData->programObjects[i]);
-#endif
+		#endif
 
 		// Delete texture object
 		glDeleteTextures(userData->textureNumPerLayer[i], userData->textureIds[i]);
