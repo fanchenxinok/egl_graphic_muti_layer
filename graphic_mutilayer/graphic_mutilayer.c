@@ -384,7 +384,7 @@ int Init(ESContext *esContext)
 	initDispArea(userData, LAYER_ID_0, 200, 180, 200, 128);
 
 	// layer1 have 2 texture
-	initDispArea(userData, LAYER_ID_1, 100, 100, 400, 400);
+	initDispArea(userData, LAYER_ID_1, 100, 100, 400, 300);
 
 	// layer2 have 4 texture
 	initDispArea(userData, LAYER_ID_2, 320, 420, 500, 300);
