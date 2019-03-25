@@ -11,6 +11,8 @@
 #define MAX_TEXTURE_PER_LAYER   (20)  // the textures that each layer can have
 #define MUTI_PROGRAM_ENABLE   (0) //if enable each layer can control alpha value, else each layer just have show or hide two status
 
+#define PI 3.1415926535897932384626433832795f
+
 typedef enum
 {
 	LAYER_ID_0 = 0,
@@ -26,6 +28,13 @@ typedef enum
 	TEXTURE_TO_SCREEN
 }enTRANS_TYPE;
 
+typedef enum
+{
+	RESET_AREA,
+	CLIP_AREA,
+	ROTATE_AREA
+}enVERTEX_SET_TYPE;
+
 typedef struct
 {
 	GLint left;
@@ -39,6 +48,12 @@ typedef struct
 	GLuint width;
 	GLuint height;
 }stTexSize;
+
+typedef struct
+{
+	GLfloat x;
+	GLfloat y;
+}stPos;
 
 typedef struct
 {
@@ -60,6 +75,7 @@ typedef struct
 	stRect dispArea[LAYER_MAX][MAX_TEXTURE_PER_LAYER]; // display area of each texture in window
 	stRect clipArea[LAYER_MAX][MAX_TEXTURE_PER_LAYER]; // clip area of each texture
 	stTexSize texSize[LAYER_MAX][MAX_TEXTURE_PER_LAYER]; // texture width and height
+	stPos texCenterPos[LAYER_MAX][MAX_TEXTURE_PER_LAYER]; // save every texture center vexture coordinate
 	GLuint winWidth;  // windows width
 	GLuint winHeight;
 
@@ -161,72 +177,123 @@ static void initVertexData(stUserData *pUser, GLuint layer, GLuint texIdx)
 	memcpy(pUser->vertices[layer][texIdx], vVertices, pUser->verticeSize);
 }
 
-static void setVertexData(stUserData *pUser, GLuint layer, GLuint texIdx, GLboolean resetDispArea, GLboolean resetClipArea)
+static void setVertexData(stUserData *pUser, GLuint layer, GLuint texIdx, enVERTEX_SET_TYPE setType, GLfloat angle)
 {
-	stRect *pDispArea = &pUser->dispArea[layer][texIdx];
-	if (resetDispArea) {
-		GLfloat left = coordinateTrans((GLfloat)pDispArea->left / pUser->winWidth, TEXTURE_TO_SCREEN);
-		GLfloat top = -1.0f * coordinateTrans((GLfloat)pDispArea->top / pUser->winHeight, TEXTURE_TO_SCREEN);
-		GLfloat right = coordinateTrans((GLfloat)(pDispArea->left + pDispArea->width) / pUser->winWidth, TEXTURE_TO_SCREEN);
-		GLfloat bottom = -1.0f * coordinateTrans((GLfloat)(pDispArea->top + pDispArea->height) / pUser->winHeight, TEXTURE_TO_SCREEN);
+	
 
-		//printf("[%f, %f] - [%f, %f] \n", left, top, right, bottom);
+	switch(setType)
+	{
+		
+		case RESET_AREA:
+		{
+			stRect *pDispArea = &pUser->dispArea[layer][texIdx];
+			GLfloat left = coordinateTrans((GLfloat)pDispArea->left / pUser->winWidth, TEXTURE_TO_SCREEN);
+			GLfloat top = -1.0f * coordinateTrans((GLfloat)pDispArea->top / pUser->winHeight, TEXTURE_TO_SCREEN);
+			GLfloat right = coordinateTrans((GLfloat)(pDispArea->left + pDispArea->width) / pUser->winWidth, TEXTURE_TO_SCREEN);
+			GLfloat bottom = -1.0f * coordinateTrans((GLfloat)(pDispArea->top + pDispArea->height) / pUser->winHeight, TEXTURE_TO_SCREEN);
 
-		enum {
-			LEFT_TOP_X = 0,
-			LEFT_TOP_Y = 1,  // left top coord index
-			LEFT_BOT_X = 5,
-			LEFT_BOT_Y = 6,  // left bottom coord index
-			RIGHT_BOT_X = 10,
-			RIGHT_BOT_Y = 11,
-			RIGHT_TOP_X = 15,
-			RIGHT_TOP_Y = 16
-		};
+			//printf("[%f, %f] - [%f, %f] \n", left, top, right, bottom);
 
-		pUser->vertices[layer][texIdx][LEFT_TOP_X] = left;
-		pUser->vertices[layer][texIdx][LEFT_TOP_Y] = top;
+			enum {
+				LEFT_TOP_X = 0,
+				LEFT_TOP_Y = 1,  // left top coord index
+				LEFT_BOT_X = 5,
+				LEFT_BOT_Y = 6,  // left bottom coord index
+				RIGHT_BOT_X = 10,
+				RIGHT_BOT_Y = 11,
+				RIGHT_TOP_X = 15,
+				RIGHT_TOP_Y = 16
+			};
 
-		pUser->vertices[layer][texIdx][LEFT_BOT_X] = left;
-		pUser->vertices[layer][texIdx][LEFT_BOT_Y] = bottom;
+			pUser->vertices[layer][texIdx][LEFT_TOP_X] = left;
+			pUser->vertices[layer][texIdx][LEFT_TOP_Y] = top;
 
-		pUser->vertices[layer][texIdx][RIGHT_BOT_X] = right;
-		pUser->vertices[layer][texIdx][RIGHT_BOT_Y] = bottom;
+			pUser->vertices[layer][texIdx][LEFT_BOT_X] = left;
+			pUser->vertices[layer][texIdx][LEFT_BOT_Y] = bottom;
 
-		pUser->vertices[layer][texIdx][RIGHT_TOP_X] = right;
-		pUser->vertices[layer][texIdx][RIGHT_TOP_Y] = top;
-	}
+			pUser->vertices[layer][texIdx][RIGHT_BOT_X] = right;
+			pUser->vertices[layer][texIdx][RIGHT_BOT_Y] = bottom;
 
-	stRect *pClipArea = &pUser->clipArea[layer][texIdx];
-	if (resetClipArea) {
-		GLfloat left = (GLfloat)pClipArea->left / pUser->texSize[layer][texIdx].width;
-		GLfloat top = (GLfloat)pClipArea->top / pUser->texSize[layer][texIdx].height;
-		GLfloat right = (GLfloat)(pClipArea->left + pClipArea->width) / pUser->texSize[layer][texIdx].width;
-		GLfloat bottom = (GLfloat)(pClipArea->top + pClipArea->height) / pUser->texSize[layer][texIdx].height;
+			pUser->vertices[layer][texIdx][RIGHT_TOP_X] = right;
+			pUser->vertices[layer][texIdx][RIGHT_TOP_Y] = top;
 
-		//printf("[%f, %f] - [%f, %f] \n", left, top, right, bottom);
+			pUser->texCenterPos[layer][texIdx].x = (pUser->vertices[layer][texIdx][RIGHT_TOP_X] - pUser->vertices[layer][texIdx][LEFT_TOP_X]) / 2 + pUser->vertices[layer][texIdx][LEFT_TOP_X];
+			pUser->texCenterPos[layer][texIdx].y = (pUser->vertices[layer][texIdx][LEFT_TOP_Y] - pUser->vertices[layer][texIdx][LEFT_BOT_Y]) / 2 + pUser->vertices[layer][texIdx][LEFT_BOT_Y];
+		}break;
+		case CLIP_AREA:
+		{
+			stRect *pClipArea = &pUser->clipArea[layer][texIdx];
+			GLfloat left = (GLfloat)pClipArea->left / pUser->texSize[layer][texIdx].width;
+			GLfloat top = (GLfloat)pClipArea->top / pUser->texSize[layer][texIdx].height;
+			GLfloat right = (GLfloat)(pClipArea->left + pClipArea->width) / pUser->texSize[layer][texIdx].width;
+			GLfloat bottom = (GLfloat)(pClipArea->top + pClipArea->height) / pUser->texSize[layer][texIdx].height;
 
-		enum {
-			LEFT_TOP_X = 3,
-			LEFT_TOP_Y = 4,  // left top coord index
-			LEFT_BOT_X = 8,
-			LEFT_BOT_Y = 9,  // left bottom coord index
-			RIGHT_BOT_X = 13,
-			RIGHT_BOT_Y = 14,
-			RIGHT_TOP_X = 18,
-			RIGHT_TOP_Y = 19
-		};
+			//printf("[%f, %f] - [%f, %f] \n", left, top, right, bottom);
 
-		pUser->vertices[layer][texIdx][LEFT_TOP_X] = left;
-		pUser->vertices[layer][texIdx][LEFT_TOP_Y] = top;
+			enum {
+				LEFT_TOP_X = 3,
+				LEFT_TOP_Y = 4,  // left top coord index
+				LEFT_BOT_X = 8,
+				LEFT_BOT_Y = 9,  // left bottom coord index
+				RIGHT_BOT_X = 13,
+				RIGHT_BOT_Y = 14,
+				RIGHT_TOP_X = 18,
+				RIGHT_TOP_Y = 19
+			};
 
-		pUser->vertices[layer][texIdx][LEFT_BOT_X] = left;
-		pUser->vertices[layer][texIdx][LEFT_BOT_Y] = bottom;
+			pUser->vertices[layer][texIdx][LEFT_TOP_X] = left;
+			pUser->vertices[layer][texIdx][LEFT_TOP_Y] = top;
 
-		pUser->vertices[layer][texIdx][RIGHT_BOT_X] = right;
-		pUser->vertices[layer][texIdx][RIGHT_BOT_Y] = bottom;
+			pUser->vertices[layer][texIdx][LEFT_BOT_X] = left;
+			pUser->vertices[layer][texIdx][LEFT_BOT_Y] = bottom;
 
-		pUser->vertices[layer][texIdx][RIGHT_TOP_X] = right;
-		pUser->vertices[layer][texIdx][RIGHT_TOP_Y] = top;
+			pUser->vertices[layer][texIdx][RIGHT_BOT_X] = right;
+			pUser->vertices[layer][texIdx][RIGHT_BOT_Y] = bottom;
+
+			pUser->vertices[layer][texIdx][RIGHT_TOP_X] = right;
+			pUser->vertices[layer][texIdx][RIGHT_TOP_Y] = top;
+		}break;
+		case ROTATE_AREA:
+		{
+			GLfloat sinAngle, cosAngle;
+			sinAngle = sinf ( angle * PI / 180.0f );
+   			cosAngle = cosf ( angle * PI / 180.0f );
+			enum {
+				LEFT_TOP_X = 0,
+				LEFT_TOP_Y = 1,  // left top coord index
+				LEFT_BOT_X = 5,
+				LEFT_BOT_Y = 6,  // left bottom coord index
+				RIGHT_BOT_X = 10,
+				RIGHT_BOT_Y = 11,
+				RIGHT_TOP_X = 15,
+				RIGHT_TOP_Y = 16
+			};
+
+			GLfloat center_x = pUser->texCenterPos[layer][texIdx].x;
+			GLfloat center_y = pUser->texCenterPos[layer][texIdx].y;
+			GLfloat x = pUser->vertices[layer][texIdx][LEFT_TOP_X] - center_x;
+			GLfloat y = pUser->vertices[layer][texIdx][LEFT_TOP_Y] - center_y;
+			pUser->vertices[layer][texIdx][LEFT_TOP_X] = x * cosAngle - y * sinAngle + center_x;
+			pUser->vertices[layer][texIdx][LEFT_TOP_Y] = x * sinAngle + y * cosAngle + center_y;
+
+			x = pUser->vertices[layer][texIdx][LEFT_BOT_X] - center_x;
+			y = pUser->vertices[layer][texIdx][LEFT_BOT_Y] - center_y;
+			pUser->vertices[layer][texIdx][LEFT_BOT_X] = x * cosAngle - y * sinAngle + center_x;
+			pUser->vertices[layer][texIdx][LEFT_BOT_Y] = x * sinAngle + y * cosAngle + center_y;
+
+			x = pUser->vertices[layer][texIdx][RIGHT_BOT_X] - center_x;
+			y = pUser->vertices[layer][texIdx][RIGHT_BOT_Y] - center_y;
+			pUser->vertices[layer][texIdx][RIGHT_BOT_X] = x * cosAngle - y * sinAngle + center_x;
+			pUser->vertices[layer][texIdx][RIGHT_BOT_Y] = x * sinAngle + y * cosAngle + center_y;
+
+			x = pUser->vertices[layer][texIdx][RIGHT_TOP_X] - center_x;
+			y = pUser->vertices[layer][texIdx][RIGHT_TOP_Y] - center_y;
+			pUser->vertices[layer][texIdx][RIGHT_TOP_X] = x * cosAngle - y * sinAngle + center_x;
+			pUser->vertices[layer][texIdx][RIGHT_TOP_Y] = x * sinAngle + y * cosAngle + center_y;
+		}break;
+		default:
+			// do nothing
+			break;
 	}
 }
 
@@ -245,7 +312,7 @@ void initDispArea(stUserData *pUser, GLuint layer, GLint x, GLint y, GLint width
 
 			initVertexData(pUser, layer, pUser->textureNumPerLayer[layer]);
 			/** Load vertex data **/
-			setVertexData(pUser, layer, pUser->textureNumPerLayer[layer], 1, 0);
+			setVertexData(pUser, layer, pUser->textureNumPerLayer[layer], RESET_AREA, 0.0);
 			pUser->textureNumPerLayer[layer]++;
 		}
 		else {
@@ -267,7 +334,7 @@ void setDispArea(stUserData *pUser, GLuint layer, GLuint texIdx, stRect *pRect)
 			pUser->dispArea[layer][texIdx].width = pRect->width;
 			pUser->dispArea[layer][texIdx].height = pRect->height;
 
-			setVertexData(pUser, layer, texIdx, 1, 0);
+			setVertexData(pUser, layer, texIdx, RESET_AREA, 0.0);
 		}
 		else {
 			esLogMessage("Layer: %d is full, texture number = %d is Invalid\n", layer, texIdx);
@@ -288,7 +355,7 @@ void setClipArea(stUserData *pUser, GLuint layer, GLuint texIdx, stRect *pRect)
 			pUser->clipArea[layer][texIdx].width = pRect->width;
 			pUser->clipArea[layer][texIdx].height = pRect->height;
 
-			setVertexData(pUser, layer, texIdx, 0, 1);
+			setVertexData(pUser, layer, texIdx, CLIP_AREA, 0.0);
 		}
 		else {
 			esLogMessage("Layer: %d is full, texture number = %d is Invalid\n", layer, texIdx);
@@ -549,6 +616,13 @@ void Update(ESContext *esContext, float deltaTime)
 	stRect hole = { 64, 64, 128, 128 };
 	digHoleInTexture(userData, userData->textureIds[LAYER_ID_1][0], &hole, alpha);
 	alpha = alpha > 0 ? --alpha : 0xff;
+
+	// rotate test
+	static GLfloat angle = 0.0;
+	setVertexData(userData, LAYER_ID_0, 2, ROTATE_AREA, angle);
+	angle += 0.5;
+	angle = (angle > 360.0) ? 0.0 : angle;
+	updateVAO(userData, LAYER_ID_0, 2);
 }
 
 
