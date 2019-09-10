@@ -8,8 +8,12 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#include <font_parse.h>
+
+
 #define MAX_TEXTURE_PER_LAYER   (20)  // the textures that each layer can have
 #define MUTI_PROGRAM_ENABLE   (0) //if enable each layer can control alpha value, else each layer just have show or hide two status
+#define MAX_FONT_NUM		(8)
 
 #define PI 3.1415926535897932384626433832795f
 
@@ -19,6 +23,7 @@ typedef enum
 	LAYER_ID_1,
 	LAYER_ID_2,
 	LAYER_ID_3,
+	LAYER_ID_TEXT,
 	LAYER_MAX
 };
 
@@ -86,6 +91,8 @@ typedef struct
 
 	GLubyte *dumpPixels;
 	GLubyte *holePixes;
+
+	GLint font_id[MAX_FONT_NUM];
 } stUserData;
 
 static const char* s_images[LAYER_MAX][MAX_TEXTURE_PER_LAYER] = {
@@ -143,6 +150,26 @@ GLint loadTexture(const char* name, GLint *outWidth, GLint *outHeight)
 	
 	return texture;
 }
+
+GLint loadStringTexture(unsigned char* data, int width, int height)
+{
+	unsigned int texture;
+	glGenTextures(1, &texture);
+
+	GLint format = GL_RGBA;
+	
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, (format == GL_RGBA) ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, (format == GL_RGBA) ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+
+	return texture;
+}
+
 
 // texture must RGBA format 
 void digHoleInTexture(stUserData *userData, GLint texture, stRect *pRect, GLubyte alpha)
@@ -462,6 +489,10 @@ int Init(ESContext *esContext)
 	// layer3 have 1 texture
 	initDispArea(userData, LAYER_ID_3, 900, 100, 200, 200);
 
+	// font
+	initDispArea(userData, LAYER_ID_TEXT, 0, 0, 600, 600);
+	initDispArea(userData, LAYER_ID_TEXT, 640, 0, 600, 600);
+
 	char vShaderStr[] =
 		"#version 300 es                            \n"
 		"layout(location = 0) in vec4 a_position;   \n"
@@ -497,24 +528,56 @@ int Init(ESContext *esContext)
 
 	GLint layer = LAYER_ID_0;
 	for (; layer < LAYER_MAX; layer++) {
-		#if MUTI_PROGRAM_ENABLE
+#if MUTI_PROGRAM_ENABLE
 		// Load the shaders and get a linked program object
 		userData->programObjects[layer] = esLoadProgram(vShaderStr, fShaderStr);
 
 		// Get the sampler location
 		userData->samplerLocs[layer] = glGetUniformLocation(userData->programObjects[layer], "s_sampler");
 		userData->ctlAlphaLocs[layer] = glGetUniformLocation(userData->programObjects[layer], "ctl_alpha");
-		#endif
-		
-		GLint texIdx = 0;
-		for (; texIdx < userData->textureNumPerLayer[layer]; texIdx++) {
-			// Load the textures
-			userData->textureIds[layer][texIdx] = loadTexture(s_images[layer][texIdx], &userData->texSize[layer][texIdx].width, &userData->texSize[layer][texIdx].height);
-			if (userData->textureIds[layer][texIdx] == 0) {
-				return FALSE;
-			}
+#endif
+		if (layer == LAYER_ID_TEXT) {
+			stFTFontDrawInfo drawinfo = {0};
+			drawinfo.canvas_w = 600;
+			drawinfo.canvas_h = 600;
+			drawinfo.need_antialias = FT_TRUE;
+			drawinfo.bold = FT_TRUE;
+			//drawinfo.italic = FT_TRUE;
+			drawinfo.draw_string = L"Hello China!\n中国棒棒滴。\n@#$%^&*\n_=+[]{}\n<>?!()";
+#if FT_DRAW_TEXT_EGL
+			ft_draw_text(userData->font_id[0], &drawinfo);
+			userData->textureIds[layer][0] = drawinfo.buffer_hdl;
+#else
+			ft_draw_text(userData->font_id[0], &drawinfo);
+			userData->textureIds[layer][0] = loadStringTexture(drawinfo.buffer_hdl, 600, 600);
+			free(drawinfo.buffer_hdl);
+			drawinfo.buffer_hdl = NULL;
+#endif
 
-			esLogMessage("Texture: %s size [%d, %d]\n", s_images[layer], userData->texSize[layer][texIdx].width, userData->texSize[layer][texIdx].height);
+			//drawinfo.italic = FT_TRUE;
+			drawinfo.draw_string = L"Hello China!\n中国棒棒滴。\n@#$%^&*\n_=+[]{}\n<>?!()";
+#if FT_DRAW_TEXT_EGL
+			ft_draw_text(userData->font_id[1], &drawinfo);
+			userData->textureIds[layer][1] = drawinfo.buffer_hdl;
+#else
+			ft_draw_text(userData->font_id[1], &drawinfo);
+			userData->textureIds[layer][1] = loadStringTexture(drawinfo.buffer_hdl, 600, 600);
+			free(drawinfo.buffer_hdl);
+			drawinfo.buffer_hdl = NULL;
+#endif
+		}
+		else {
+			GLint texIdx = 0;
+			for (; texIdx < userData->textureNumPerLayer[layer]; texIdx++) {
+				// Load the textures
+				userData->textureIds[layer][texIdx] = loadTexture(s_images[layer][texIdx], &userData->texSize[layer][texIdx].width, &userData->texSize[layer][texIdx].height);
+				if (userData->textureIds[layer][texIdx] == 0) {
+					return FALSE;
+				}
+
+				userData->texVisable[layer][texIdx] = GL_TRUE;
+				esLogMessage("Texture: %s size [%d, %d]\n", s_images[layer][texIdx], userData->texSize[layer][texIdx].width, userData->texSize[layer][texIdx].height);
+			}
 		}
 
 		setLayerAlpha(userData, layer, 1.0f);
@@ -732,8 +795,28 @@ int esMain(ESContext *esContext)
 {
 	esContext->userData = malloc(sizeof(stUserData));
 
-	esCreateWindow(esContext, "Blend Test", 1280, 720, ES_WINDOW_RGB);
+	stUserData *pUserData = (stUserData*)esContext->userData;
+	pUserData->winWidth = 1280;
+	pUserData->winHeight = 720;
 
+	esCreateWindow(esContext, "Blend Test", pUserData->winWidth, pUserData->winHeight, ES_WINDOW_RGB);
+
+	// FONT Init
+	if (ft_init() != -1) {
+		pUserData->font_id[0] = ft_font_create("bb1550.ttf", 64);
+		if (pUserData->font_id[0] == -1) {
+			esLogMessage("ft_font_create(0) fail\n");
+		}
+
+		pUserData->font_id[1] = ft_font_create("FZLTHYS-GB18030.ttf", 64);
+		if (pUserData->font_id[1] == -1) {
+			esLogMessage("ft_font_create(1) fail\n");
+		}
+	}
+	else {
+		esLogMessage("ft_init() fail.\n");
+	}
+	
 	if (!Init(esContext)) {
 		return GL_FALSE;
 	}
