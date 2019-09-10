@@ -575,7 +575,6 @@ int Init(ESContext *esContext)
 					return FALSE;
 				}
 
-				userData->texVisable[layer][texIdx] = GL_TRUE;
 				esLogMessage("Texture: %s size [%d, %d]\n", s_images[layer][texIdx], userData->texSize[layer][texIdx].width, userData->texSize[layer][texIdx].height);
 			}
 		}
