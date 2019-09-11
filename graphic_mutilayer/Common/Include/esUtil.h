@@ -80,6 +80,16 @@ extern "C" {
 #define ES_WINDOW_MULTISAMPLE   8
 
 
+typedef enum
+{
+	LEFT_BUTTON_DOWN = 0,
+	LEFT_BUTTON_UP,
+	RIGHT_BUTTON_DOWN,
+	RIGHT_BUTTON_UP,
+	MID_BUTTON_DOWN,
+	MID_BUTTON_UP
+}ES_BUTTON_EVENT;
+
 ///
 // Types
 //
@@ -133,6 +143,7 @@ struct ESContext
    void ( ESCALLBACK *shutdownFunc ) ( ESContext * );
    void ( ESCALLBACK *keyFunc ) ( ESContext *, unsigned char, int, int );
    void ( ESCALLBACK *updateFunc ) ( ESContext *, float deltaTime );
+   void ( ESCALLBACK *buttonFunc ) ( ESContext *, ES_BUTTON_EVENT, int, int );
 };
 
 
@@ -183,6 +194,14 @@ void ESUTIL_API esRegisterUpdateFunc ( ESContext *esContext, void ( ESCALLBACK *
 //
 void ESUTIL_API esRegisterKeyFunc ( ESContext *esContext,
                                     void ( ESCALLBACK *drawFunc ) ( ESContext *, unsigned char, int, int ) );
+//
+/// \brief Register a button push processing callback function
+/// \param esContext Application context
+/// \param buttonFunc button event callback function for application processing of keyboard input
+//
+void ESUTIL_API esRegisterButtonFunc ( ESContext *esContext,
+									void ( ESCALLBACK *buttonFunc ) ( ESContext *, ES_BUTTON_EVENT, int, int ) );
+
 //
 /// \brief Log a message to the debug output for the platform
 /// \param formatStr Format string for error log.

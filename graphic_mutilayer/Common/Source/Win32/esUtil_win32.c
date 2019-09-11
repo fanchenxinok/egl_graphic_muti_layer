@@ -97,7 +97,48 @@ LRESULT WINAPI ESWindowProc ( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
                                  ( int ) point.x, ( int ) point.y );
       }
       break;
+	  case WM_LBUTTONDOWN:
+	  case WM_LBUTTONUP:
+	  case WM_RBUTTONDOWN:
+	  case WM_RBUTTONUP:
+	  case WM_MBUTTONDOWN:
+	  case WM_MBUTTONUP:
+	  {
+		 POINT      point;
+         ESContext *esContext = ( ESContext * ) ( LONG_PTR ) GetWindowLongPtr ( hWnd, GWL_USERDATA );
 
+         GetCursorPos ( &point );
+
+
+		 ES_BUTTON_EVENT button_event;
+		 switch(uMsg) {
+		 	case WM_LBUTTONDOWN:
+				button_event = LEFT_BUTTON_DOWN;
+		 		break;
+			case WM_LBUTTONUP:
+				button_event = LEFT_BUTTON_UP;
+		 		break;
+			case WM_RBUTTONDOWN:
+				button_event = RIGHT_BUTTON_DOWN;
+		 		break;
+			case WM_RBUTTONUP:
+				button_event = RIGHT_BUTTON_UP;
+		 		break;
+			case WM_MBUTTONDOWN:
+				button_event = MID_BUTTON_DOWN;
+		 		break;
+			case WM_MBUTTONUP:
+				button_event = MID_BUTTON_UP;
+		 		break;
+			default:
+				button_event = LEFT_BUTTON_DOWN;
+		 		break;
+		 }
+         if ( esContext && esContext->buttonFunc )
+            esContext->buttonFunc ( esContext, button_event,
+                                 ( int ) point.x, ( int ) point.y );
+	  }
+	  break;
       default:
          lRet = DefWindowProc ( hWnd, uMsg, wParam, lParam );
          break;

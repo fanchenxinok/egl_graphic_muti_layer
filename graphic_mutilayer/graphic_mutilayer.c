@@ -830,6 +830,10 @@ void KeyInput(ESContext *esContext, unsigned char ch, int x, int y)
 #endif
 }
 
+void ButtonPush(ESContext *esContext, int type, int x, int y)
+{
+	esLogMessage("Button TYPE: %d at (%d, %d)\n", type,  x, y);
+}
 
 int esMain(ESContext *esContext)
 {
@@ -865,6 +869,7 @@ int esMain(ESContext *esContext)
 	esRegisterUpdateFunc(esContext, Update);
 	esRegisterShutdownFunc(esContext, ShutDown);
 	esRegisterKeyFunc(esContext, KeyInput);
+	esRegisterButtonFunc(esContext, ButtonPush);
 	
 	return GL_TRUE;
 }

@@ -282,6 +282,15 @@ void ESUTIL_API esRegisterKeyFunc ( ESContext *esContext,
    esContext->keyFunc = keyFunc;
 }
 
+///
+//	esRegisterButtonFunc()
+//
+void ESUTIL_API esRegisterButtonFunc ( ESContext *esContext,
+									void ( ESCALLBACK *buttonFunc ) ( ESContext *, ES_BUTTON_EVENT, int, int ) )
+{
+   esContext->buttonFunc = buttonFunc;
+}
+
 
 ///
 // esLogMessage()
