@@ -268,7 +268,6 @@ void ft_font_delete(int font_id)
 	lw_unlock(&s_ft_mng.ft_lock);
 }
 
-#if FT_DRAW_TEXT_EGL
 int ft_draw_text(int font_id, stFTFontDrawInfo *pDrawInfo)
 {
 	stFTFontInfo *pFTFontInfo = (stFTFontInfo*)ft_find_font(font_id);
@@ -276,16 +275,23 @@ int ft_draw_text(int font_id, stFTFontDrawInfo *pDrawInfo)
 		//注意： wchar_t在windows占2byte,在linux占4bytes.
 		wchar_t *string = pDrawInfo->draw_string;
 
-	    //创建纹理buffer
-		glGenTextures(1, &pDrawInfo->buffer_hdl);
-		GLint format = GL_RGBA;
-		glBindTexture(GL_TEXTURE_2D, pDrawInfo->buffer_hdl);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, (format == GL_RGBA) ? GL_CLAMP_TO_EDGE : GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, (format == GL_RGBA) ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+		if(pDrawInfo->buffer_hdl == 0) {
+			#if FT_DRAW_TEXT_EGL
+		    //创建纹理buffer
+			glGenTextures(1, &pDrawInfo->buffer_hdl);
+			GLint format = GL_RGBA;
+			glBindTexture(GL_TEXTURE_2D, pDrawInfo->buffer_hdl);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, (format == GL_RGBA) ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, (format == GL_RGBA) ? GL_CLAMP_TO_EDGE : GL_REPEAT);
 
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexImage2D(GL_TEXTURE_2D, 0, format, pDrawInfo->canvas_w, pDrawInfo->canvas_h, 0, format, GL_UNSIGNED_BYTE, NULL);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexImage2D(GL_TEXTURE_2D, 0, format, pDrawInfo->canvas_w, pDrawInfo->canvas_h, 0, format, GL_UNSIGNED_BYTE, NULL);
+			#else
+			pDrawInfo->buffer_hdl = (FT_Bytes)malloc(pDrawInfo->canvas_w * pDrawInfo->canvas_h * 4);
+			memset(pDrawInfo->buffer_hdl, 0x0, pDrawInfo->canvas_w * pDrawInfo->canvas_h * 4);
+			#endif
+		}
 		
 		if(0 == pDrawInfo->buffer_hdl) {
 			printf("ft_draw_text create texture fail.\n");
@@ -306,7 +312,7 @@ int ft_draw_text(int font_id, stFTFontDrawInfo *pDrawInfo)
 
 		glBindTexture(GL_TEXTURE_2D, pDrawInfo->buffer_hdl);
 		int total = wcslen(string), n = 0;
-		int x_start = 0, y_start = pFTFontInfo->ft_font_pixel;
+		int x_start = pDrawInfo->canvas_x, y_start = pDrawInfo->canvas_y + pFTFontInfo->ft_font_pixel;
 		for(n = 0; n < total; n++) {
 			if (string[n] == L'\n') {
 	            x_start = 0;
@@ -329,76 +335,9 @@ int ft_draw_text(int font_id, stFTFontDrawInfo *pDrawInfo)
 				int y_adjust = y_start - metrics.horiBearingY;
 				printf("[GlyphMetrics] w:%d, h:%d, horiBearingX:%d, horiBearingY:%d, horiAdvance:%d, x_start:%d\n",
 					metrics.width,metrics.height,metrics.horiBearingX,metrics.horiBearingY,metrics.horiAdvance,x_start);
-			
+				#if FT_DRAW_TEXT_EGL
 				glTexSubImage2D(GL_TEXTURE_2D, 0, x_start, y_adjust, metrics.width, metrics.height, GL_RGBA, GL_UNSIGNED_BYTE, pFTFontInfo->ft_font_rgba);
-				x_start += metrics.horiAdvance;
-				if (pDrawInfo->italic) {
-					x_start += 2;
-				}
-			}
-			else {
-				printf("ft_draw_text load char: %d fail\n", n);
-			}
-		}
-	}
-	else {
-		printf("This font is not create: %d\n", font_id);
-		return -1;
-	}
-	return 0;
-}
-
-#else
-int ft_draw_text(int font_id, stFTFontDrawInfo *pDrawInfo)
-{
-	stFTFontInfo *pFTFontInfo = (stFTFontInfo*)ft_find_font(font_id);
-	if(pFTFontInfo && pDrawInfo) {
-		//注意： wchar_t在windows占2byte,在linux占4bytes.
-		wchar_t *string = pDrawInfo->draw_string;
-		pDrawInfo->buffer_hdl = (FT_Bytes)malloc(pDrawInfo->canvas_w * pDrawInfo->canvas_h * 4);
-		
-		if(NULL == pDrawInfo->buffer_hdl) {
-			printf("ft_draw_text malloc fail.\n");
-			return -1;
-		}
-
-		memset(pDrawInfo->buffer_hdl, 0x0, pDrawInfo->canvas_w * pDrawInfo->canvas_h * 4);
-		if (pDrawInfo->italic) { // 斜体字
-	        FT_Matrix matrix;
-	        matrix.xx = 0x10000L;
-			matrix.xy = 0.5f * 0x10000L;
-			matrix.yx = 0;
-			matrix.yy = 0x10000L;
-	        FT_Set_Transform(pFTFontInfo->ft_font_face, &matrix, NULL);
-	    }
-
-		if(pDrawInfo->line_distance <= 0) pDrawInfo->line_distance = 2;
-		if(pDrawInfo->line_distance > 10) pDrawInfo->line_distance = 10;
-		
-		int total = wcslen(string), n = 0;
-		int x_start = 0, y_start = pFTFontInfo->ft_font_pixel;
-		for(n = 0; n < total; n++) {
-			if (string[n] == L'\n') {
-	            x_start = 0;
-	            y_start += pFTFontInfo->ft_font_pixel + pDrawInfo->line_distance;    //row spacing
-	            continue;
-	        }
-
-			stFTGlyphMetrics metrics;
-			if(ft_load_char(pFTFontInfo, string[n], &metrics, pDrawInfo->bold, pDrawInfo->need_antialias) != -1) {
-				int line = 0;
-				if((x_start + metrics.width) > pDrawInfo->canvas_w) {
-					metrics.width = pDrawInfo->canvas_w - x_start;
-				}
-				if((y_start + metrics.height) > pDrawInfo->canvas_h) {
-					metrics.height = pDrawInfo->canvas_h - y_start;
-				}
-				int dst_stride = pDrawInfo->canvas_w * 4, src_stride = metrics.width * 4;
-				x_start += metrics.horiBearingX;
-				x_start = (x_start < 0) ? 0 : x_start;
-				int y_adjust = y_start - metrics.horiBearingY;
-				printf("[GlyphMetrics] w:%d, h:%d, horiBearingX:%d, horiBearingY:%d, horiAdvance:%d, x_start:%d\n",
-					metrics.width,metrics.height,metrics.horiBearingX,metrics.horiBearingY,metrics.horiAdvance,x_start);
+				#else
 				FT_Bytes dst = pDrawInfo->buffer_hdl + y_adjust * dst_stride + x_start * 4;
 				FT_Bytes src = pFTFontInfo->ft_font_rgba;
 				for(line = 0; line < metrics.height; line++) {
@@ -406,6 +345,7 @@ int ft_draw_text(int font_id, stFTFontDrawInfo *pDrawInfo)
 					dst += dst_stride;
 					src += src_stride;
 				}
+				#endif
 				x_start += metrics.horiAdvance;
 				if (pDrawInfo->italic) {
 					x_start += 2;
@@ -422,7 +362,6 @@ int ft_draw_text(int font_id, stFTFontDrawInfo *pDrawInfo)
 	}
 	return 0;
 }
-#endif
 
 int ft_init(void)
 {

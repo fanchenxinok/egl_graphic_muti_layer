@@ -18,7 +18,8 @@ typedef enum
 }FT_BOOL;
 
 typedef struct
-{	
+{	int canvas_x;				// 文字在画布中的起始位置而不是屏幕的位置
+	int canvas_y;
 	int canvas_w;		// 文字显示画布的高宽
 	int canvas_h;
 	wchar_t* draw_string; //文字信息 例如：L"中国hello world!"

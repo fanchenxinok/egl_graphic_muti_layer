@@ -493,6 +493,9 @@ int Init(ESContext *esContext)
 	initDispArea(userData, LAYER_ID_TEXT, 0, 0, 600, 600);
 	initDispArea(userData, LAYER_ID_TEXT, 640, 0, 600, 600);
 
+	// input char
+	initDispArea(userData, LAYER_ID_TEXT, 0, 600, 600, 200);
+
 	char vShaderStr[] =
 		"#version 300 es                            \n"
 		"layout(location = 0) in vec4 a_position;   \n"
@@ -538,6 +541,7 @@ int Init(ESContext *esContext)
 #endif
 		if (layer == LAYER_ID_TEXT) {
 			stFTFontDrawInfo drawinfo = {0};
+			drawinfo.canvas_x = drawinfo.canvas_y = drawinfo.buffer_hdl = 0;
 			drawinfo.canvas_w = 600;
 			drawinfo.canvas_h = 600;
 			drawinfo.need_antialias = FT_TRUE;
@@ -553,7 +557,7 @@ int Init(ESContext *esContext)
 			free(drawinfo.buffer_hdl);
 			drawinfo.buffer_hdl = NULL;
 #endif
-
+			drawinfo.canvas_x = drawinfo.canvas_y = drawinfo.buffer_hdl = 0;
 			//drawinfo.italic = FT_TRUE;
 			drawinfo.draw_string = L"Hello China!\n中国棒棒滴。\n@#$%^&*\n_=+[]{}\n<>?!()";
 #if FT_DRAW_TEXT_EGL
@@ -565,6 +569,21 @@ int Init(ESContext *esContext)
 			free(drawinfo.buffer_hdl);
 			drawinfo.buffer_hdl = NULL;
 #endif
+
+			drawinfo.canvas_x = drawinfo.canvas_y = drawinfo.buffer_hdl = 0;
+			drawinfo.canvas_w = 600;
+			drawinfo.canvas_h = 200;
+			drawinfo.draw_string = L"输入字符为：";
+#if FT_DRAW_TEXT_EGL
+			ft_draw_text(userData->font_id[1], &drawinfo);
+			userData->textureIds[layer][2] = drawinfo.buffer_hdl;
+#else
+			ft_draw_text(userData->font_id[2], &drawinfo);
+			userData->textureIds[layer][2] = loadStringTexture(drawinfo.buffer_hdl, 600, 200);
+			free(drawinfo.buffer_hdl);
+			drawinfo.buffer_hdl = NULL;
+#endif
+
 		}
 		else {
 			GLint texIdx = 0;
@@ -790,6 +809,28 @@ void ShutDown(ESContext *esContext)
 	userData->holePixes = NULL;
 }
 
+void KeyInput(ESContext *esContext, unsigned char ch, int x, int y)
+{
+	esLogMessage("keyInput: %c at (%d, %d)\n", ch,  x, y);
+	wchar_t str[1] = { '\0' };
+	str[0] = (wchar_t)ch;
+	stUserData *userData = esContext->userData;
+#if FT_DRAW_TEXT_EGL
+	stFTFontDrawInfo drawinfo = { 0 };
+	drawinfo.canvas_x = 350;
+	drawinfo.canvas_y = 0;
+	drawinfo.canvas_w = 600;
+	drawinfo.canvas_h = 200;
+	drawinfo.need_antialias = FT_TRUE;
+	drawinfo.bold = FT_TRUE;
+	//drawinfo.italic = FT_TRUE;
+	drawinfo.draw_string = &ch;
+	drawinfo.buffer_hdl = userData->textureIds[LAYER_ID_TEXT][2];
+	ft_draw_text(userData->font_id[1], &drawinfo);
+#endif
+}
+
+
 int esMain(ESContext *esContext)
 {
 	esContext->userData = malloc(sizeof(stUserData));
@@ -823,6 +864,7 @@ int esMain(ESContext *esContext)
 	esRegisterDrawFunc(esContext, Draw);
 	esRegisterUpdateFunc(esContext, Update);
 	esRegisterShutdownFunc(esContext, ShutDown);
-
+	esRegisterKeyFunc(esContext, KeyInput);
+	
 	return GL_TRUE;
 }
