@@ -395,12 +395,16 @@ void setLayerAlpha(stUserData *userData, GLuint layer, GLfloat alpha)
 	userData->alphas[layer] = alpha;
 }
 
-void updateVAO(stUserData *pUser, GLuint layer, GLuint texId)
+void updateVAO(stUserData *pUser, GLuint layer, GLuint texId, GLboolean needCreate)
 {
 	if ((layer >= LAYER_MAX) || (texId >= MAX_TEXTURE_PER_LAYER)) {
 		return;
 	}
 	else {
+		if(needCreate) {
+			glGenBuffers(1, &pUser->vboIds[layer][texId]);
+			glGenVertexArrays(1, &pUser->vaoIds[layer][texId]);
+		}
 		glBindBuffer(GL_ARRAY_BUFFER, pUser->vboIds[layer][texId]);
 		glBufferData(GL_ARRAY_BUFFER, pUser->verticeSize, pUser->vertices[layer][texId], GL_STATIC_DRAW);
 
@@ -464,6 +468,7 @@ int Init(ESContext *esContext)
 {
 	stUserData *userData = esContext->userData;
 	memset(userData->textureNumPerLayer, 0, sizeof(userData->textureNumPerLayer));
+	memset(userData->textureIds, 0, LAYER_MAX * MAX_TEXTURE_PER_LAYER * sizeof(GLuint));
 
 	userData->winWidth = 1280;
 	userData->winHeight = 720;
@@ -638,7 +643,7 @@ void Update(ESContext *esContext, float deltaTime)
 		clipArea.width = (1280 - x) * userData->texSize[LAYER_ID_3][0].width / 200;
 	}
 	setClipArea(userData, LAYER_ID_3, 0, &clipArea);
-	updateVAO(userData, LAYER_ID_3, 0);
+	updateVAO(userData, LAYER_ID_3, 0, GL_FALSE);
 	x = (x++ > userData->winWidth) ? 0 : x;
 
 	static GLint cnt = 1;
@@ -650,7 +655,7 @@ void Update(ESContext *esContext, float deltaTime)
 		dispArea.height = delta;
 		delta = (delta++ > 300) ? 1 : delta;
 		setDispArea(userData, LAYER_ID_2, 3, &dispArea);
-		updateVAO(userData, LAYER_ID_2, 3);
+		updateVAO(userData, LAYER_ID_2, 3, GL_FALSE);
 	}
 	cnt++;
 
@@ -664,7 +669,7 @@ void Update(ESContext *esContext, float deltaTime)
 		dispArea.width = userData->winWidth;
 		dispArea.height = userData->winHeight;
 		setDispArea(userData, LAYER_ID_0, 1, &dispArea);
-		updateVAO(userData, LAYER_ID_0, 1);
+		updateVAO(userData, LAYER_ID_0, 1, GL_FALSE);
 	#endif
 	}
 	else {
@@ -673,7 +678,7 @@ void Update(ESContext *esContext, float deltaTime)
 	#else
 		memset(&dispArea, 0, sizeof(dispArea));
 		setDispArea(userData, LAYER_ID_0, 1, &dispArea);
-		updateVAO(userData, LAYER_ID_0, 1);
+		updateVAO(userData, LAYER_ID_0, 1, GL_FALSE);
 	#endif
 	}
 #else
@@ -689,7 +694,7 @@ void Update(ESContext *esContext, float deltaTime)
 	dispArea.width = userData->winWidth;
 	dispArea.height = h * userData->winHeight /userData->texSize[LAYER_ID_0][1].height;
 	setDispArea(userData, LAYER_ID_0, 1, &dispArea);
-	updateVAO(userData, LAYER_ID_0, 1);
+	updateVAO(userData, LAYER_ID_0, 1, GL_FALSE);
 
 #endif
 
@@ -703,7 +708,29 @@ void Update(ESContext *esContext, float deltaTime)
 	setVertexData(userData, LAYER_ID_0, 2, ROTATE_AREA, angle);
 	angle += 0.5;
 	angle = (angle > 360.0) ? 0.0 : angle;
-	updateVAO(userData, LAYER_ID_0, 2);
+	updateVAO(userData, LAYER_ID_0, 2, GL_FALSE);
+
+	if(userData->textureIds[LAYER_ID_TEXT][3] == 0) {
+		initDispArea(userData, LAYER_ID_TEXT, 640, 600, 600, 200);
+		stFTFontDrawInfo drawinfo = {0};
+		drawinfo.canvas_x = drawinfo.canvas_y = drawinfo.buffer_hdl = 0;
+		drawinfo.canvas_w = 600;
+		drawinfo.canvas_h = 200;
+		drawinfo.need_antialias = FT_TRUE;
+		drawinfo.bold = FT_TRUE;
+		//drawinfo.italic = FT_TRUE;
+		drawinfo.draw_string = L"大米饭好吃！";
+#if FT_DRAW_TEXT_EGL
+		ft_draw_text(userData->font_id[0], &drawinfo);
+		userData->textureIds[LAYER_ID_TEXT][3] = drawinfo.buffer_hdl;
+#else
+		ft_draw_text(userData->font_id[0], &drawinfo);
+		userData->textureIds[LAYER_ID_TEXT][3] = loadStringTexture(drawinfo.buffer_hdl, 600, 200);
+		free(drawinfo.buffer_hdl);
+		drawinfo.buffer_hdl = NULL;
+#endif
+		updateVAO(userData, LAYER_ID_TEXT, 3, GL_TRUE);
+	}
 }
 
 
