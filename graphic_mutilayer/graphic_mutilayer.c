@@ -90,7 +90,6 @@ typedef struct
 	GLushort indiceNum;
 
 	GLubyte *dumpPixels;
-	GLubyte *holePixes;
 
 	GLint font_id[MAX_FONT_NUM];
 } stUserData;
@@ -171,15 +170,47 @@ GLint loadStringTexture(unsigned char* data, int width, int height)
 }
 
 
+#define CLEAR_BUFF_W	(100)
+#define CLEAR_BUFF_H	(100)
+static unsigned char s_clear_buffer[CLEAR_BUFF_W * CLEAR_BUFF_H * 4] = { 0x00 };
+void eglCleanTexture(GLint texture, int x, int y, int w, int h)
+{
+	glBindTexture(GL_TEXTURE_2D, texture);
+	int x_offset = x, y_offset = y;
+	int w_l = w, h_l = h;
+	while (h_l > 0) {
+		int c_h = (h_l > CLEAR_BUFF_H) ? CLEAR_BUFF_H : h_l;
+		x_offset = x;
+		w_l = w;
+		while (w_l > 0) {
+			int c_w = (w_l > CLEAR_BUFF_W) ? CLEAR_BUFF_W : w_l;
+			glTexSubImage2D(GL_TEXTURE_2D, 0, x_offset, y_offset, c_w, c_h, GL_RGBA, GL_UNSIGNED_BYTE, s_clear_buffer);
+			x_offset += c_w;
+			if (w_l > CLEAR_BUFF_W) {
+				w_l -= CLEAR_BUFF_W;
+			}
+			else {
+				break;
+			}
+		}
+		y_offset += c_h;
+		if (h_l > CLEAR_BUFF_H) {
+			h_l -= CLEAR_BUFF_H;
+		}
+		else {
+			break;
+		}
+	}
+}
+
 // texture must RGBA format 
 void digHoleInTexture(stUserData *userData, GLint texture, stRect *pRect, GLubyte alpha)
 {
 	GLint i = 0;
-	for (i = 3; i < userData->winWidth * userData->winHeight * 4; i += 4) {
-		userData->holePixes[i] = alpha;
+	for (i = 3; i < CLEAR_BUFF_W * CLEAR_BUFF_H * 4; i += 4) {
+		s_clear_buffer[i] = alpha;
 	}
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, pRect->left, pRect->top, pRect->width, pRect->height, GL_RGBA, GL_UNSIGNED_BYTE, userData->holePixes);
+	eglCleanTexture(texture, pRect->left, pRect->top, pRect->width, pRect->height);
 }
 
 static GLfloat coordinateTrans(GLfloat coord, enTRANS_TYPE type)
@@ -473,9 +504,6 @@ int Init(ESContext *esContext)
 	userData->winWidth = 1280;
 	userData->winHeight = 720;
 	userData->dumpPixels = (GLubyte*)malloc(userData->winWidth * userData->winHeight * 4 * sizeof(GLubyte));
-
-	userData->holePixes = (GLubyte*)malloc(sizeof(GLubyte) * userData->winWidth * userData->winHeight * 4);
-	memset(userData->holePixes, 0, sizeof(GLubyte) * userData->winWidth * userData->winHeight * 4);
 
 	// layer0 have 3 texture
 	initDispArea(userData, LAYER_ID_0, 0, 0, userData->winWidth, userData->winHeight);
@@ -832,8 +860,6 @@ void ShutDown(ESContext *esContext)
 		userData->dumpPixels = NULL;
 	}
 
-	free(userData->holePixes);
-	userData->holePixes = NULL;
 }
 
 void KeyInput(ESContext *esContext, unsigned char ch, int x, int y)
